@@ -3,58 +3,63 @@ import streamlit as st
 import pandas as pd
 import os
 from io import BytesIO
-import xlwt  # Library untuk membuat file Excel dalam format .xls
+from openpyxl import Workbook  # Library untuk membuat file Excel dalam format .xlsx
 from datetime import datetime  # Untuk menangani input tanggal
 
-# *Validasi file model*
-if not os.path.exists('scaler_iq.sav') or not os.path.exists('model_iq.sav'):
-    st.error("❌ File model tidak ditemukan. Pastikan file 'scaler_iq.sav' dan 'model_iq.sav' tersedia.")
+# Validasi file model
+if not os.path.exists("scaler_iq.sav") or not os.path.exists("model_iq.sav"):
+    st.error(
+        "❌ File model tidak ditemukan. Pastikan file 'scaler_iq.sav' dan 'model_iq.sav' tersedia."
+    )
     st.stop()
 
 # Membaca model scaler dan model IQ yang telah disimpan
-scaler_iq = pickle.load(open('scaler_iq.sav', 'rb'))
-model_iq = pickle.load(open('model_iq.sav', 'rb'))
+scaler_iq = pickle.load(open("scaler_iq.sav", "rb"))
+model_iq = pickle.load(open("model_iq.sav", "rb"))
 
-# *Judul dan header aplikasi*
+# Judul dan header aplikasi
 
 st.markdown(
     """
     <h1 style="text-align: center;">🌟 Prediksi Nilai IQ 🌟</h1>
     """,
-    unsafe_allow_html=True
+    unsafe_allow_html=True,
 )
 
 st.markdown(
     """
     <h3 style="text-align: center;">Masukkan data berikut untuk memulai prediksi IQ Anda</h3>
     """,
-    unsafe_allow_html=True
+    unsafe_allow_html=True,
 )
 
-
-# *Input data pengguna*
+# Input data pengguna
 col1, col2 = st.columns(2)
 
 with col1:
     nama = st.text_input("Masukkan Nama Anda", value="")
-    jenis_kelamin = st.selectbox("Pilih Jenis Kelamin", ["👨 Laki-laki", "👩 Perempuan"])
+    jenis_kelamin = st.selectbox(
+        "Pilih Jenis Kelamin", ["👨 Laki-laki", "👩 Perempuan"]
+    )
 
 with col2:
     tanggal = st.date_input("Masukkan Tanggal", value=datetime.today())
     skor_mentah = st.text_input("Masukkan Skor Mentah", value="0")
 
-# *Simpan histori data dalam session_state*
+# Simpan histori data dalam session_state
 if "histori_prediksi" not in st.session_state:
-    st.session_state["histori_prediksi"] = []  # Menyimpan semua data prediksi sebagai list of dict
+    st.session_state[
+        "histori_prediksi"
+    ] = []  # Menyimpan semua data prediksi sebagai list of dict
 
-# *Tombol untuk memproses data*
+# Tombol untuk memproses data
 if st.button("🔍 Hitung Nilai IQ"):
     try:
         # Konversi skor mentah ke tipe float
         skor_mentah_float = float(skor_mentah)
 
         # Masukkan data sebagai DataFrame
-        df_input = pd.DataFrame([[skor_mentah_float]], columns=['Skor Mentah'])
+        df_input = pd.DataFrame([[skor_mentah_float]], columns=["Skor Mentah"])
 
         # Pastikan kolom input cocok dengan model
         df_input.columns = model_iq.feature_names_in_
@@ -84,55 +89,58 @@ if st.button("🔍 Hitung Nilai IQ"):
         st.info(f"📋 Keterangan: {keterangan_iq} (Prediksi Outcome: {outcome_label})")
 
         # Simpan data prediksi ke histori
-        st.session_state["histori_prediksi"].append({
-            "Nama": nama,
-            "Jenis Kelamin": jenis_kelamin,
-            "Tanggal": tanggal.strftime("%Y-%m-%d"),
-            "Skor Mentah": skor_mentah_float,
-            "Nilai IQ": round(nilai_iq, 2),
-            "Keterangan": keterangan_iq,
-            "Outcome": outcome_label
-        })
+        st.session_state["histori_prediksi"].append(
+            {
+                "Nama": nama,
+                "Jenis Kelamin": jenis_kelamin,
+                "Tanggal": tanggal.strftime("%Y-%m-%d"),
+                "Skor Mentah": skor_mentah_float,
+                "Nilai IQ": round(nilai_iq, 2),
+                "Keterangan": keterangan_iq,
+                "Outcome": outcome_label,
+            }
+        )
 
     except ValueError:
         st.error("⚠ Pastikan input Skor Mentah berupa angka yang valid.")
     except Exception as e:
         st.error(f"⚠ Terjadi kesalahan: {str(e)}")
 
-# *Fungsi untuk menyimpan data ke file Excel (.xls) dalam memori*
-def save_to_excel_xls_in_memory(data):
+
+# Fungsi untuk menyimpan data ke file Excel (.xlsx) dalam memori
+def save_to_excel_xlsx_in_memory(data):
     output = BytesIO()
-    workbook = xlwt.Workbook()
-    sheet = workbook.add_sheet("Hasil Prediksi")
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Hasil Prediksi"
 
     # Menuliskan header
-    for col_num, column_title in enumerate(data.columns):
-        sheet.write(0, col_num, column_title)
+    sheet.append(data.columns.tolist())
 
     # Menuliskan data baris demi baris
-    for row_num, row in enumerate(data.values, start=1):
-        for col_num, cell_value in enumerate(row):
-            sheet.write(row_num, col_num, cell_value)
+    for row in data.values:
+        sheet.append(row.tolist())
 
     workbook.save(output)
     output.seek(0)
     return output
 
-# *Tombol untuk mengunduh hasil prediksi dalam bentuk Excel (.xls)*
+
+# Tombol untuk mengunduh hasil prediksi dalam bentuk Excel (.xlsx)
 if st.session_state["histori_prediksi"]:
     try:
         # Konversi histori prediksi ke DataFrame
         df_hasil = pd.DataFrame(st.session_state["histori_prediksi"])
 
-        # Simpan ke file Excel (.xls) dalam memori
-        excel_file = save_to_excel_xls_in_memory(df_hasil)
+        # Simpan ke file Excel (.xlsx) dalam memori
+        excel_file = save_to_excel_xlsx_in_memory(df_hasil)
 
-        # Unduh file dalam format .xls
+        # Unduh file dalam format .xlsx
         st.download_button(
-            label="💾 Download Hasil Prediksi (.xls)",
+            label="💾 Download Hasil Prediksi (.xlsx)",
             data=excel_file,
-            file_name="hasil_prediksi.xls",
-            mime="application/vnd.ms-excel"
+            file_name="hasil_prediksi.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
     except Exception as e:
